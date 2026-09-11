@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Phrase Deck Prototype</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #1c1c1e; color: #f2f2f7;
+    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+    overscroll-behavior: none;
+  }
+  #app {
+    display: flex; flex-direction: column; align-items: center;
+    min-height: 100vh; padding: env(safe-area-inset-top, 16px) 16px env(safe-area-inset-bottom, 16px);
+    touch-action: pan-y;
+  }
+
+  #deckScreen { width: 100%; max-width: 380px; }
+  #deckScreen h1 { font-size: 22px; font-weight: 700; margin: 16px 4px 20px; }
+  .deck-item {
+    width: 100%; background: #2c2c2e; border: none; color: #f2f2f7;
+    border-radius: 14px; padding: 18px 16px; margin-bottom: 12px;
+    display: flex; justify-content: space-between; align-items: center;
+    text-align: left; font-size: 17px; font-weight: 600;
+  }
+  .deck-item:active { background: #3a3a3c; }
+  .deck-sub { font-size: 13px; color: #8e8e93; font-weight: 400; margin-top: 2px; }
+  .deck-chevron { color: #8e8e93; font-size: 18px; }
+
+  #cardScreen { width: 100%; max-width: 380px; display: none; }
+  .topbar {
+    width: 100%; display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 4px;
+  }
+  .deck-title { font-size: 15px; font-weight: 600; color: #f2f2f7; }
+  .counter { font-size: 12px; color: #8e8e93; margin-top: 1px; }
+  .iconbtn {
+    background: #2c2c2e; border: none; color: #f2f2f7;
+    width: 40px; height: 40px; border-radius: 20px;
+    font-size: 18px; display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .iconbtn:active { background: #3a3a3c; }
+
+  #cardOuter {
+    width: 100%; aspect-ratio: 3/4; margin-top: 8px; position: relative;
+  }
+  #card {
+    width: 100%; height: 100%;
+    background: #2c2c2e; border-radius: 20px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    position: relative; overflow: hidden;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+    user-select: none;
+    will-change: transform;
+  }
+  #explain-wrap {
+    width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+    padding: 28px;
+  }
+  #explainText {
+    font-size: 20px; line-height: 1.6; text-align: center; color: #f2f2f7;
+  }
+  #explainText.english { font-style: italic; color: #d0d0d5; }
+  .tap-hint {
+    position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+    font-size: 12px; color: #8e8e93; background: rgba(0,0,0,0.35);
+    padding: 4px 10px; border-radius: 12px; pointer-events: none;
+  }
+  .audio-badge {
+    position: absolute; top: 14px; right: 14px;
+    font-size: 11px; color: #30d158; background: rgba(0,0,0,0.35);
+    padding: 4px 8px; border-radius: 10px; pointer-events: none;
+  }
+  .stage-badge {
+    position: absolute; top: 14px; left: 14px;
+    font-size: 11px; color: #8e8e93; background: rgba(0,0,0,0.35);
+    padding: 4px 8px; border-radius: 10px; pointer-events: none;
+  }
+  #reveal {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: rgba(20,20,22,0.96);
+    padding: 22px 16px 26px;
+    text-align: center;
+    transform: translateY(100%);
+    border-top: 1px solid #3a3a3c;
+    will-change: transform;
+  }
+  #reveal.transition { transition: transform 0.22s ease-out; }
+  #revealLabel { font-size: 11px; color: #8e8e93; margin-bottom: 8px; letter-spacing: 0.3px; }
+  #revealHanzi { font-size: 30px; font-weight: 600; margin-bottom: 6px; }
+  #revealPinyin { font-size: 15px; color: #a7a7ad; }
+  .swipe-hint {
+    position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+    font-size: 12px; color: #8e8e93; pointer-events: none;
+  }
+
+  .controls {
+    width: 100%;
+    display: flex; align-items: center; justify-content: center; gap: 14px;
+    margin-top: 20px;
+  }
+  #recordBtn {
+    background: #3a3a3c; border: none; color: #f2f2f7;
+    width: 56px; height: 56px; border-radius: 28px;
+    font-size: 22px; display: flex; align-items: center; justify-content: center;
+  }
+  #recordBtn.recording { background: #ff453a; }
+  #playBtn {
+    background: #3a3a3c; border: none; color: #f2f2f7;
+    width: 48px; height: 48px; border-radius: 24px;
+    font-size: 18px; display: flex; align-items: center; justify-content: center;
+    opacity: 0.35; pointer-events: none;
+  }
+  #playBtn.enabled { opacity: 1; pointer-events: auto; }
+  .label { font-size: 11px; color: #8e8e93; text-align: center; margin-top: 4px; }
+  .ctrl-col { display: flex; flex-direction: column; align-items: center; }
+
+  #toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: #2c2c2e; color: #f2f2f7; padding: 8px 16px; border-radius: 10px;
+    font-size: 13px; opacity: 0; transition: opacity 0.25s; pointer-events: none;
+    z-index: 10;
+  }
+  #toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="deckScreen">
+    <h1>Flashcards</h1>
+    <div id="deckList"></div>
+  </div>
+
+  <div id="cardScreen">
+    <div class="topbar">
+      <button class="iconbtn" id="backBtn" aria-label="Back to decks">&#8592;</button>
+      <div style="text-align:center">
+        <div class="deck-title" id="deckTitleLabel"></div>
+        <div class="counter" id="counter">1 / 3</div>
+      </div>
+      <button class="iconbtn" id="shuffleBtn" aria-label="Shuffle">&#8635;</button>
+    </div>
+
+    <div id="cardOuter">
+      <div id="card">
+        <div class="stage-badge" id="stageBadge">explanation</div>
+        <div class="tap-hint" id="tapHint">tap to reveal phrase</div>
+        <div class="audio-badge" id="audioBadge" style="display:none">&#127925;</div>
+        <div id="explain-wrap"><div id="explainText"></div></div>
+        <div class="swipe-hint" id="swipeHint">&#8593; replay &nbsp;&nbsp; swipe down for sample &#8595;</div>
+        <div id="reveal">
+          <div id="revealLabel"></div>
+          <div id="revealHanzi"></div>
+          <div id="revealPinyin"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="ctrl-col">
+        <button id="recordBtn" aria-label="Record">&#127908;</button>
+        <div class="label">record</div>
+      </div>
+      <div class="ctrl-col">
+        <button id="playBtn" aria-label="Play recording">&#9654;</button>
+        <div class="label">playback</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ============================================================
+   PROTOTYPE — phrase deck state machine
+   ============================================================
+   Each card has:
+     explanation: { text, lang: 'zh' | 'en' }   (audio only if zh)
+     focus:       { hanzi, pinyin }
+     sentences:   [ { hanzi, pinyin }, ... ]      (variable length)
+
+   STAGE MODEL (per card, resets to 0 on card change):
+     stage 0            -> explanation shown, autoplay attempt on entry
+     stage 1             -> tap reveals focus item + plays its audio
+     stage 2..N          -> swipe down cycles sample sentences
+                            (stage 2 = sentence[0], stage 3 = sentence[1], ...)
+   Swipe down past the last sentence: no-op (dead swipe).
+   Swipe up: reverses one stage; at stage 0, replays explanation audio
+             instead (manual fallback if autoplay was blocked).
+   Tap at any stage: (re)plays that stage's audio.
+   Left/right: next/prev CARD, resets stage to 0 for the new card.
+   ============================================================ */
+
+const decks = [
+  {
+    id: 'phrases_test',
+    name: 'Phrase Practice (test)',
+    cards: [
+      {
+        explanation: { text: '有事先安排好的行程或聚會。', lang: 'zh' },
+        focus: { hanzi: '有約', pinyin: 'yǒu yuē' },
+        sentences: [
+          { hanzi: '我完全忘記今天有約。', pinyin: 'Wǒ wánquán wàngjì jīntiān yǒu yuē.' },
+          { hanzi: '我下午跟客戶有約，要先離開。', pinyin: 'Wǒ xiàwǔ gēn kèhù yǒu yuē, yào xiān líkāi.' },
+          { hanzi: '我們幾點約？', pinyin: 'Wǒmen jǐ diǎn yuē?' }
+        ]
+      },
+      {
+        explanation: { text: '"到底" 用在問句裡，表示說話者很想知道答案，語氣比較強烈、有點著急。', lang: 'zh' },
+        focus: { hanzi: '到底', pinyin: 'dàodǐ' },
+        sentences: [
+          { hanzi: '你到底要不要去？', pinyin: 'Nǐ dàodǐ yào bú yào qù?' },
+          { hanzi: '這件事到底是誰做的？', pinyin: 'Zhè jiàn shì dàodǐ shì shéi zuò de?' }
+        ]
+      },
+      {
+        explanation: { text: '"而已" 放在句子最後，表示數量或程度不多，只是這樣，沒有更多。', lang: 'zh' },
+        focus: { hanzi: '而已', pinyin: 'éryǐ' },
+        sentences: [
+          { hanzi: '我只是隨便說說而已。', pinyin: 'Wǒ zhǐshì suíbiàn shuō shuō éryǐ.' },
+          { hanzi: '這個蛋糕才一百塊而已。', pinyin: 'Zhège dàngāo cái yìbǎi kuài éryǐ.' },
+          { hanzi: '他不是生氣，只是累了而已。', pinyin: 'Tā bú shì shēngqì, zhǐshì lèile éryǐ.' }
+        ]
+      }
+    ]
+  }
+];
+
+const deckScreen = document.getElementById('deckScreen');
+const cardScreen = document.getElementById('cardScreen');
+const deckList = document.getElementById('deckList');
+const cardEl = document.getElementById('card');
+const cardOuter = document.getElementById('cardOuter');
+const explainText = document.getElementById('explainText');
+const revealEl = document.getElementById('reveal');
+const revealLabel = document.getElementById('revealLabel');
+const revealHanzi = document.getElementById('revealHanzi');
+const revealPinyin = document.getElementById('revealPinyin');
+const stageBadge = document.getElementById('stageBadge');
+const tapHint = document.getElementById('tapHint');
+const audioBadge = document.getElementById('audioBadge');
+const swipeHint = document.getElementById('swipeHint');
+const counterEl = document.getElementById('counter');
+const deckTitleLabel = document.getElementById('deckTitleLabel');
+
+let currentDeck = null;
+let order = [];
+let idx = 0;
+let stage = 0; // 0 = explanation, 1 = focus, 2+ = sentence(stage-2)
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1400);
+}
+
+function renderDeckList() {
+  deckList.innerHTML = '';
+  decks.forEach(d => {
+    const btn = document.createElement('button');
+    btn.className = 'deck-item';
+    btn.innerHTML = `<div><div>${d.name}</div><div class="deck-sub">${d.cards.length} cards</div></div><div class="deck-chevron">&#8250;</div>`;
+    btn.addEventListener('click', () => openDeck(d));
+    deckList.appendChild(btn);
+  });
+}
+
+function openDeck(d) {
+  currentDeck = d;
+  order = d.cards.map((_, i) => i);
+  idx = 0;
+  deckScreen.style.display = 'none';
+  cardScreen.style.display = 'block';
+  deckTitleLabel.textContent = d.name;
+  render(true);
+}
+
+document.getElementById('backBtn').addEventListener('click', () => {
+  speechSynthesis.cancel();
+  cardScreen.style.display = 'none';
+  deckScreen.style.display = 'block';
+});
+
+function currentCard() {
+  return currentDeck.cards[order[idx]];
+}
+
+function render(isNewCard) {
+  const c = currentCard();
+  counterEl.textContent = (idx + 1) + ' / ' + currentDeck.cards.length;
+
+  if (isNewCard) stage = 0;
+
+  cardEl.style.transform = 'translateX(0px) rotate(0deg)';
+  revealEl.classList.remove('transition');
+  revealEl.style.transform = 'translateY(100%)';
+  void revealEl.offsetWidth;
+  revealEl.classList.add('transition');
+
+  if (stage === 0) {
+    explainText.textContent = c.explanation.text;
+    explainText.className = c.explanation.lang === 'en' ? 'english' : '';
+    stageBadge.textContent = 'explanation';
+    tapHint.textContent = 'tap to reveal phrase';
+    tapHint.style.display = 'block';
+    audioBadge.style.display = c.explanation.lang === 'zh' ? 'block' : 'none';
+    swipeHint.textContent = '\u2191 replay    tap to continue';
+    revealEl.style.transform = 'translateY(100%)';
+    if (isNewCard) {
+      attemptAutoplay(c);
+    }
+  } else if (stage === 1) {
+    stageBadge.textContent = 'phrase';
+    tapHint.textContent = 'tap to replay';
+    audioBadge.style.display = 'block';
+    swipeHint.textContent = '\u2191 explanation    swipe down for sample \u2193';
+    revealLabel.textContent = 'PHRASE';
+    revealHanzi.textContent = c.focus.hanzi;
+    revealPinyin.textContent = c.focus.pinyin;
+    revealEl.style.transform = 'translateY(0%)';
+  } else {
+    const sIdx = stage - 2;
+    stageBadge.textContent = 'sample ' + (sIdx + 1) + ' / ' + c.sentences.length;
+    tapHint.textContent = 'tap to replay';
+    audioBadge.style.display = 'block';
+    const atEnd = sIdx >= c.sentences.length - 1;
+    swipeHint.textContent = atEnd ? '\u2191 back    (end of samples)' : '\u2191 back    swipe down for next \u2193';
+    const s = c.sentences[sIdx];
+    revealLabel.textContent = 'SAMPLE ' + (sIdx + 1);
+    revealHanzi.textContent = s.hanzi;
+    revealPinyin.textContent = s.pinyin;
+    revealEl.style.transform = 'translateY(0%)';
+  }
+}
+
+/* ---------- TTS ---------- */
+let voices = [];
+let chosenVoice = null;
+function pickVoice() {
+  voices = speechSynthesis.getVoices();
+  chosenVoice =
+    voices.find(v => v.lang === 'zh-TW') ||
+    voices.find(v => /^zh/i.test(v.lang)) ||
+    null;
+}
+if ('speechSynthesis' in window) {
+  pickVoice();
+  speechSynthesis.onvoiceschanged = pickVoice;
+}
+function speakTTS(text, onend) {
+  if (!('speechSynthesis' in window)) { toast('TTS not supported'); if (onend) onend(); return; }
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'zh-TW';
+  u.rate = 0.82;
+  if (chosenVoice) u.voice = chosenVoice;
+  if (onend) u.onend = onend;
+  speechSynthesis.speak(u);
+}
+
+function attemptAutoplay(c) {
+  if (c.explanation.lang !== 'zh') return;
+  // Best-effort autoplay; if the browser blocks it silently, the
+  // swipe-up gesture (a real user gesture) will trigger it manually.
+  try { speakTTS(c.explanation.text); } catch (e) { /* blocked, ignore */ }
+}
+
+function playCurrentStage(onComplete) {
+  const c = currentCard();
+  if (stage === 0) {
+    if (c.explanation.lang === 'zh') speakTTS(c.explanation.text, onComplete);
+    else if (onComplete) onComplete();
+  } else if (stage === 1) {
+    speakTTS(c.focus.hanzi, onComplete);
+  } else {
+    const s = c.sentences[stage - 2];
+    speakTTS(s.hanzi, onComplete);
+  }
+}
+
+/* ---------- Navigation ---------- */
+function nextCard() { idx = (idx + 1) % currentDeck.cards.length; render(true); }
+function prevCard() { idx = (idx - 1 + currentDeck.cards.length) % currentDeck.cards.length; render(true); }
+
+function shuffle() {
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+  idx = 0;
+  render(true);
+  toast('Shuffled');
+}
+document.getElementById('shuffleBtn').addEventListener('click', shuffle);
+
+function stepDown() {
+  const c = currentCard();
+  if (stage === 0) return; // down-swipe has no meaning on the explanation stage
+  const maxStage = 1 + c.sentences.length;
+  if (stage >= maxStage) return; // dead swipe at the end
+  stage++;
+  render(false);
+  playCurrentStage();
+}
+
+function stepUp() {
+  if (stage === 0) {
+    // nothing to reverse to; manual replay / autoplay fallback
+    speakTTS(currentCard().explanation.text);
+    return;
+  }
+  stage--;
+  render(false);
+  if (stage > 0) playCurrentStage();
+}
+
+/* ---------- Drag-following swipe (4-directional) ---------- */
+let startX = 0, startY = 0, moved = false, dragging = false, dragMode = null;
+let lastX = 0, lastY = 0, lastT = 0, velocityX = 0, velocityY = 0;
+let pendingAction = null;
+const CARD_W = () => cardOuter.getBoundingClientRect().width;
+const CARD_H = () => cardOuter.getBoundingClientRect().height;
+
+cardEl.addEventListener('transitionend', e => {
+  if (e.propertyName !== 'transform' || !pendingAction) return;
+  const action = pendingAction;
+  pendingAction = null;
+  cardEl.style.transition = 'none';
+  if (action === 'next') nextCard(); else prevCard();
+});
+
+cardEl.addEventListener('touchstart', e => {
+  const t = e.touches[0];
+  startX = t.clientX; startY = t.clientY;
+  lastX = t.clientX; lastY = t.clientY; lastT = Date.now();
+  velocityX = 0; velocityY = 0;
+  moved = false; dragging = true; dragMode = null;
+  cardEl.style.transition = 'none';
+}, { passive: true });
+
+cardEl.addEventListener('touchmove', e => {
+  if (!dragging) return;
+  const t = e.touches[0];
+  const dx = t.clientX - startX;
+  const dy = t.clientY - startY;
+
+  if (!dragMode) {
+    if (Math.abs(dx) > 8 || Math.abs(dy) > 8) {
+      dragMode = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+      moved = true;
+    }
+  }
+
+  if (dragMode === 'x') {
+    cardEl.style.transform = 'translateX(' + dx + 'px) rotate(' + (dx / 18) + 'deg)';
+  }
+  // vertical drag: no visual follow (discrete stage stepping, not a
+  // continuous reveal panel like the vocab deck) — just tracked for
+  // direction/velocity at touchend.
+
+  const now = Date.now();
+  const dt = now - lastT;
+  if (dt > 0) { velocityX = (t.clientX - lastX) / dt; velocityY = (t.clientY - lastY) / dt; }
+  lastX = t.clientX; lastY = t.clientY; lastT = now;
+}, { passive: true });
+
+cardEl.addEventListener('touchend', e => {
+  dragging = false;
+  cardEl.style.transition = 'transform 0.28s cubic-bezier(0.22,0.61,0.36,1)';
+
+  const t = e.changedTouches[0];
+  const dx = t.clientX - startX;
+  const dy = t.clientY - startY;
+
+  if (!moved) {
+    // tap
+    if (stage === 0) {
+      stage = 1;
+      render(false);
+      playCurrentStage();
+    } else {
+      playCurrentStage();
+    }
+    dragMode = null;
+    return;
+  }
+
+  if (dragMode === 'x') {
+    const w = CARD_W();
+    const distThresh = 60;
+    const velThresh = 0.28;
+    if (dx < -distThresh || velocityX < -velThresh) {
+      pendingAction = 'next';
+      cardEl.style.transform = 'translateX(-' + (w * 1.3) + 'px) rotate(-14deg)';
+    } else if (dx > distThresh || velocityX > velThresh) {
+      pendingAction = 'prev';
+      cardEl.style.transform = 'translateX(' + (w * 1.3) + 'px) rotate(14deg)';
+    } else {
+      cardEl.style.transform = 'translateX(0px) rotate(0deg)';
+    }
+  } else if (dragMode === 'y') {
+    cardEl.style.transform = 'translateX(0px) rotate(0deg)';
+    const distThresh = 40;
+    const velThresh = 0.25;
+    if (dy > distThresh || velocityY > velThresh) {
+      stepDown();
+    } else if (dy < -distThresh || velocityY < -velThresh) {
+      stepUp();
+    }
+  }
+  dragMode = null;
+}, { passive: true });
+
+cardEl.addEventListener('click', () => {
+  if (!('ontouchstart' in window)) {
+    if (stage === 0) { stage = 1; render(false); playCurrentStage(); }
+    else playCurrentStage();
+  }
+});
+
+/* ---------- Record / playback (unchanged pattern from vocab deck) ---------- */
+let mediaRecorder = null;
+let chunks = [];
+let lastBlobUrl = null;
+let isRecording = false;
+let recordedAudio = new Audio();
+
+const recordBtn = document.getElementById('recordBtn');
+const playBtn = document.getElementById('playBtn');
+
+function pickMimeType() {
+  const candidates = ['audio/mp4', 'audio/aac', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus'];
+  for (const t of candidates) {
+    if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) return t;
+  }
+  return '';
+}
+
+recordBtn.addEventListener('click', async () => {
+  if (isRecording) { mediaRecorder.stop(); return; }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    chunks = [];
+    const mimeType = pickMimeType();
+    mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+    const actualType = mediaRecorder.mimeType || mimeType || 'audio/mp4';
+    mediaRecorder.ondataavailable = e => { if (e.data && e.data.size > 0) chunks.push(e.data); };
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(chunks, { type: actualType });
+      if (lastBlobUrl) URL.revokeObjectURL(lastBlobUrl);
+      lastBlobUrl = URL.createObjectURL(blob);
+      recordedAudio.src = lastBlobUrl;
+      recordedAudio.load();
+      playBtn.classList.add('enabled');
+      isRecording = false;
+      recordBtn.classList.remove('recording');
+      stream.getTracks().forEach(t => t.stop());
+      if (blob.size > 0) {
+        setTimeout(() => {
+          playCurrentStage(() => {
+            recordedAudio.currentTime = 0;
+            recordedAudio.play();
+          });
+        }, 350);
+      } else {
+        toast('Recording empty \u2014 try again');
+      }
+    };
+    mediaRecorder.start();
+    isRecording = true;
+    recordBtn.classList.add('recording');
+    toast('Recording\u2026');
+  } catch (err) {
+    toast('Mic permission denied');
+  }
+});
+
+playBtn.addEventListener('click', () => {
+  if (!lastBlobUrl) return;
+  recordedAudio.currentTime = 0;
+  recordedAudio.play();
+});
+
+renderDeckList();
+</script>
+</body>
+</html>
